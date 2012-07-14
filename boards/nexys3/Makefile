@@ -7,6 +7,8 @@ SIM_SRC=                                  \
 	system_tb.v
 
 SRC=                                      \
+	../../rtl/bram_tdp.v                  \
+	../../rtl/vga_sync.v                  \
 	system.v
 
 UCF_SRC=                                  \
@@ -77,7 +79,7 @@ system-routed.ncd: system.ncd
 	par $(SMARTGUIDE) -ol high -w system.ncd system-routed.ncd
 
 system.bit: system-routed.ncd
-	bitgen -w system-routed.ncd system.bit
+	bitgen -g INIT_9K:Yes -w system-routed.ncd system.bit
 
 system.mcs: system.bit
 	promgen -u 0 system
