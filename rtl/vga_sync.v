@@ -13,7 +13,7 @@ module vga_sync (
 //generate 50MHz pixelclock
 reg vga_clk;
 always @(posedge clk)
-    vga_clk <= ~rst_n ? 0 : ~vga_clk;
+    vga_clk <= ~rst_n ? 1'b0 : ~vga_clk;
 
 assign pixelclock = vga_clk;
 

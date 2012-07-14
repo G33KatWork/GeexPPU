@@ -37,65 +37,71 @@ wire        workBank = CounterY[0];
 wire        work_en = CounterX < 11'h400 && CounterY < 11'h400;
 wire [ 9:0] work_write_address = {workBank, workX};
 
-//4K RAM which holds pointer into chardata_ram for 64x64 grid of characters to be displayed
-bram_tdp #(
+//Get glyph
+wire [ 5:0]  glyphX = workX[8:3];
+wire [ 5:0]  glyphY = workY[8:3];
+wire [11:0]  glyphAddr = {glyphY, glyphX};
+wire [ 7:0]  currentGlyph;
+
+
+bram_tdp #( //4K RAM which holds pointer into chardata_ram for 64x64 grid of characters to be displayed
     .DATA_WIDTH(8),
     .ADDR_WIDTH(12),
     .MEM_FILE_NAME("../../data/chars.ram")
 ) char_ram (
-    .a_clk(0),
-    .a_ena(1),
-    .a_wr(0),
+    .a_clk(1'b0),
+    .a_ena(1'b1),
+    .a_wr(1'b0),
     .a_addr(12'b0),
     .a_din(8'h00),
     .a_dout(),
 
     .b_clk(vga_clk),
-    .b_ena(1),
-    .b_wr(0),
-    .b_addr(12'b0),
+    .b_ena(work_en),
+    .b_wr(1'b0),
+    .b_addr(glyphAddr),
     .b_din(8'h00),
-    .b_dout()
+    .b_dout(currentGlyph)
 );
 
-//4K RAM with pixeldata of glyps, 1 byte holds 4 pixel (index into char color table)
-bram_tdp #(
+
+bram_tdp #( //4K RAM with pixeldata of glyps, 1 byte holds 4 pixel (index into char color table)
     .DATA_WIDTH(8),
     .ADDR_WIDTH(12),
     .MEM_FILE_NAME("../../data/chardata.ram")
 ) chardata_ram (
-    .a_clk(0),
-    .a_ena(1),
-    .a_wr(0),
+    .a_clk(1'b0),
+    .a_ena(1'b1),
+    .a_wr(1'b0),
     .a_addr(12'b0),
     .a_din(8'h00),
     .a_dout(),
 
     .b_clk(vga_clk),
-    .b_ena(1),
-    .b_wr(0),
+    .b_ena(1'b1),
+    .b_wr(1'b0),
     .b_addr(12'b0),
     .b_din(8'h00),
     .b_dout()
 );
 
-//2K RAM which holds 4 colors for each possible character (16bit color * 4 colors * 256 chars)
-//only 8 bit for colors used currently, bit 9 = transparency
-bram_tdp #(
+
+
+bram_tdp #( //2K RAM which holds 4 colors for each possible character (16bit color * 4 colors * 256 chars)
     .DATA_WIDTH(8),
     .ADDR_WIDTH(11),
     .MEM_FILE_NAME("../../data/charpal.ram")
 ) charpal_ram (
-    .a_clk(0),
-    .a_ena(1),
-    .a_wr(0),
+    .a_clk(1'b0),
+    .a_ena(1'b1),
+    .a_wr(1'b0),
     .a_addr(11'b0),
     .a_din(8'h00),
     .a_dout(),
 
     .b_clk(vga_clk),
-    .b_ena(1),
-    .b_wr(0),
+    .b_ena(1'b1),
+    .b_wr(1'b0),
     .b_addr(11'b0),
     .b_din(8'h00),
     .b_dout()
@@ -113,14 +119,14 @@ bram_tdp #(
 ) line_ram (
     .a_clk(vga_clk),
     .a_ena(work_en),
-    .a_wr(1),
+    .a_wr(1'b1),
     .a_addr(work_write_address),
-    .a_din(work_write_address[7:0]),                  //just for testing
+    .a_din({1'b1, work_write_address[6:0]}),                  //just for testing
     .a_dout(),
 
     .b_clk(vga_clk),
-    .b_ena(1),
-    .b_wr(0),
+    .b_ena(1'b1),
+    .b_wr(1'b0),
     .b_addr(scan_read_address),
     .b_din(8'h00),
     .b_dout(comp_out)
