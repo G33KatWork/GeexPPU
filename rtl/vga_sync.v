@@ -14,7 +14,6 @@ module vga_sync (
 reg vga_clk;
 always @(posedge clk)
     vga_clk <= ~rst_n ? 1'b0 : ~vga_clk;
-
 assign pixelclock = vga_clk;
 
 /*  800x600@72Hz
@@ -41,7 +40,7 @@ Back porch      23      0.4784
 Whole frame     666     13.8528*/
 
 `define H_DISPLAY       800
-`define H_BACKPORCH     63
+`define H_BACKPORCH     64
 `define H_SYNC          120
 `define H_FRONTPORCH    56
 `define H_TOTALPERIOD   `H_DISPLAY + `H_BACKPORCH + `H_SYNC + `H_FRONTPORCH
@@ -58,33 +57,33 @@ reg         hsyncpulse;
 reg         vga_HS, vga_VS, vga_active;
 
 //horizontal counter
-always @(posedge vga_clk or negedge rst_n) begin
+always @(posedge pixelclock or negedge rst_n) begin
     if(~rst_n) begin
         CounterX <= 0;
     end else begin
-        if(CounterX == `H_TOTALPERIOD)
-            CounterX <= 0;
-        else
+        if(CounterX < `H_TOTALPERIOD)
             CounterX <= CounterX + 1;
+        else
+            CounterX <= 0;
     end
 end
 assign counterX = CounterX;
 
 //vertical counter
-always @(posedge vga_clk or negedge rst_n) begin
+always @(posedge pixelclock or negedge rst_n) begin
     if(~rst_n) begin
         CounterY <= 0;
     end else begin
-        if(CounterY == `V_TOTALPERIOD)
-            CounterY <= 0;
-        else if(CounterX == `H_TOTALPERIOD)
+        if(CounterY < `V_TOTALPERIOD && CounterX == `H_TOTALPERIOD)
             CounterY <= CounterY + 1;
+        else if(CounterX == `H_TOTALPERIOD)
+            CounterY <= 0;
     end
 end
 assign counterY = CounterY;
 
 //hsync generation
-always @(posedge vga_clk or negedge rst_n) begin
+always @(posedge pixelclock or negedge rst_n) begin
     if(~rst_n) begin
         vga_HS <= 0;
     end else begin
@@ -97,7 +96,7 @@ end
 assign hsync = ~vga_HS;
 
 //vsync generation
-always @(posedge vga_clk or negedge rst_n) begin
+always @(posedge pixelclock or negedge rst_n) begin
     if(~rst_n) begin
         vga_VS <= 0;
     end else begin
@@ -110,7 +109,7 @@ end
 assign vsync = ~vga_VS;
 
 //display active signal generation
-always @(posedge vga_clk or negedge rst_n) begin
+always @(posedge pixelclock or negedge rst_n) begin
     if(~rst_n) begin
         vga_active <= 0;
     end else begin

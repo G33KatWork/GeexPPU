@@ -52,7 +52,8 @@ initial begin
 	$dumpvars(-1, dut);
 
 	// reset
-	#0  reset <= 1;
+	#0  reset <= 0;
+	#10 reset <= 1;
 	#80 reset <= 0;
 
 	#(tck*50000) $finish;
