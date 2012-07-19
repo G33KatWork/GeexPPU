@@ -42,7 +42,7 @@ always @(posedge vga_clk or negedge rst_n) begin
         if (CounterX == 1040 & (CounterY[1] == 0)) begin
             workcnt <= 0;
             work_en <= 1;
-        end else if(workcnt < 10'h1ff) begin
+        end else if(workcnt < 10'h1ff + 3) begin
             workcnt <= workcnt + 1;
             work_en <= 1;
         end else begin
@@ -55,9 +55,7 @@ end
 //wire [ 8:0] workX = CounterX[9:1];
 wire [ 9:0] workY = CounterY[9:1];
 wire        workBank = CounterY[1];
-
-//wire        work_en = workcnt < 10'h200 && CounterY[0] == 1;
-wire [ 9:0] work_write_address = {workBank, workcnt[8:0]};
+wire [ 9:0] work_write_address = {workBank, workcnt[8:0]} - 3;      //-3: 3 pipeline stages for background rendering
 
 
 //Get glyph
@@ -89,7 +87,7 @@ bram_tdp #( //4K RAM which holds pointer into chardata_ram for 64x64 grid of cha
 
 reg [2:0] _column;
 always @(posedge vga_clk)
-    _column <= workcnt;
+    _column <= workcnt[2:0];
 
 reg [7:0] _glyph;
 always @(posedge vga_clk)
@@ -143,25 +141,29 @@ end*/
 
 
 
-/*bram_tdp #( //2K RAM which holds 4 colors for each possible character (16bit color * 4 colors * 256 chars)
-    .DATA_WIDTH(8),
-    .ADDR_WIDTH(11),
+wire [ 9:0] palletteaddress = {_glyph, charout};
+wire [15:0] coloredcharout;
+bram_tdp #( //2K RAM which holds 4 colors for each possible character (16bit color * 4 colors * 256 chars)
+    .DATA_WIDTH(16),
+    .ADDR_WIDTH(10),
     .MEM_FILE_NAME("../../data/charpal.ram")
 ) charpal_ram (
     .a_clk(1'b0),
     .a_ena(1'b1),
     .a_wr(1'b0),
-    .a_addr(11'b0),
-    .a_din(8'h00),
+    .a_addr(10'b0),
+    .a_din(16'h00),
     .a_dout(),
 
     .b_clk(vga_clk),
     .b_ena(1'b1),
     .b_wr(1'b0),
-    .b_addr(),
-    .b_din(8'h00),
-    .b_dout()
-);*/
+    .b_addr(palletteaddress),
+    .b_din(16'h00),
+    .b_dout(coloredcharout)
+);
+
+
 
 wire        scanBank = CounterY[1];
 wire [ 8:0] scanX = CounterX[9:1];
@@ -173,18 +175,18 @@ bram_tdp #(
     .ADDR_WIDTH(10),
     .MEM_FILE_NAME("../../data/data.ram")
 ) line_ram (
-    /*.a_clk(vga_clk),
+    .a_clk(vga_clk),
     .a_ena(work_en),
     .a_wr(1'b1),
     .a_addr(work_write_address),
-    .a_din({charout, charout, charout, charout}),                  //just for testing
-    .a_dout(),*/
-    .a_clk(1'b0),
+    .a_din(coloredcharout[7:0]),                  //just for testing
+    .a_dout(),
+    /*.a_clk(1'b0),
     .a_ena(1'b0),
     .a_wr(1'b0),
     .a_addr(10'b0),
     .a_din(8'b0),
-    .a_dout(),
+    .a_dout(),*/
 
     .b_clk(vga_clk),
     .b_ena(1'b1),
