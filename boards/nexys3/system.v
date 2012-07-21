@@ -211,8 +211,7 @@ wire [ 9:0] scan_read_address = {scanBank, scanX};
 wire [7:0] comp_out;
 bram_tdp #(
     .DATA_WIDTH(8),
-    .ADDR_WIDTH(10),
-    .MEM_FILE_NAME("../../data/data.ram")
+    .ADDR_WIDTH(10)
 ) line_ram (
     .a_clk(vga_clk),
     .a_ena(work_en),
