@@ -193,6 +193,16 @@ bram_tdp #( //2K RAM which holds 4 colors for each possible character (16bit col
 );
 
 
+
+
+reg  [14:0] bgColor = 15'h19DD; //light blue
+
+wire        pixelTransparent = coloredcharout[15];
+wire [14:0] finalColor = pixelTransparent ? bgColor : coloredcharout[14:0];
+
+
+wire [ 7:0] finalColor8Bit = {finalColor[14:12], finalColor[9:7], finalColor[4:3]};
+
 //VGA scanner for output on lines to the VGA port
 wire        scanBank = CounterY[1];
 wire [ 8:0] scanX = CounterX[9:1];
@@ -208,7 +218,7 @@ bram_tdp #(
     .a_ena(work_en),
     .a_wr(1'b1),
     .a_addr(work_write_address),
-    .a_din(coloredcharout[7:0]),                  //just for testing
+    .a_din(finalColor8Bit),                  //just for testing
     .a_dout(),
     /*.a_clk(1'b0),
     .a_ena(1'b0),
