@@ -7,7 +7,9 @@ module vga_sync (
    output        vsync,
    output        displayactive,
    output [10:0] counterX,
-   output [ 9:0] counterY
+   output [ 9:0] counterY,
+   output        lineStart,
+   output        frameStart
 );
 
 //generate 50MHz pixelclock
@@ -120,5 +122,9 @@ always @(posedge pixelclock or negedge rst_n) begin
     end
 end
 assign displayactive = vga_active;
+
+//create two 1-pixelclock-cycle sync signals for frame and line start
+assign lineStart = CounterX == 0;
+assign frameStart = CounterY == 0 && CounterX == 0;
 
 endmodule

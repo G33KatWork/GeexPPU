@@ -56,7 +56,8 @@ initial begin
 	#10 reset <= 1;
 	#80 reset <= 0;
 
-	#(tck*50000) $finish;
+	//wait for one frame
+	#(tck*1700000) $finish;
 end
 
 endmodule

@@ -28,38 +28,81 @@ vga_sync sync (
     .vsync(Vsync),
     .displayactive(vga_active),
     .counterX(CounterX),
-    .counterY(CounterY)
+    .counterY(CounterY),
+    .lineStart(vga_lineStart),
+    .frameStart(vga_frameStart)
 );
 
+wire        work_en;
+reg  [ 8:0] workX;
+reg  [ 8:0] workY;
 
-reg  [ 9:0] workcnt;
-reg         work_en;
+
+parameter s_lineWorking = 0;
+parameter s_waitForLineEnd = 1;
+parameter s_waitOneLine = 2;
+parameter s_waitForFrameStart = 3;
+
+reg  [ 1:0] coordState;
+reg  [ 1:0] coordState_next;
+
+//Statemachine for rendering process
 always @(posedge vga_clk or negedge rst_n) begin
     if(~rst_n) begin
-        workcnt <= 0;
-        work_en <= 0;
+        coordState <= s_lineWorking;
+        coordState_next <= s_lineWorking;
+
+        workX <= 0;
+        workY <= 1;
     end else begin
-        if (CounterX == 1040 & (CounterY[1] == 0)) begin
-            workcnt <= 0;
-            work_en <= 1;
-        end else if(workcnt < 10'h1ff + 3) begin
-            workcnt <= workcnt + 1;
-            work_en <= 1;
-        end else begin
-            work_en <= 0;
-        end
+        case(coordState)
+            s_lineWorking: begin
+                if(workX < 10'd400+3) begin             //Render 400 pixel (+3 for 3 pipeline stages)
+                    workX <= workX + 1;
+                    coordState <= s_lineWorking;
+                end else begin                          //Done with 400 pixel rendering, wait for line end
+                    workX <= 0;
+                    coordState <= s_waitForLineEnd;
+                end
+            end
+
+            s_waitForLineEnd: begin
+                if(vga_lineStart == 1) begin            //New line starts, we need to wait another one
+                    coordState <= s_waitOneLine;
+                end else begin
+                    coordState <= s_waitForLineEnd;
+                end
+            end
+
+            s_waitOneLine: begin
+                if(vga_lineStart == 1 && workY < 9'd299) begin  //Line finished, start rendering next line
+                    workY <= workY + 1;
+                    coordState <= s_lineWorking;
+                end else if(vga_lineStart == 1)
+                    coordState <= s_waitForFrameStart;
+                else
+                    coordState <= s_waitOneLine;
+            end
+
+            s_waitForFrameStart: begin                  //Wait until one line before new frame start to render line 0 into RAM
+                if(CounterY == 665 && CounterX == 0) begin
+                    workY <= 0;
+                    coordState <= s_lineWorking;
+                end else
+                    coordState <= s_waitForFrameStart;
+            end
+        endcase
     end
 end
 
+assign work_en = coordState == s_lineWorking;
 
-//wire [ 8:0] workX = CounterX[9:1];
-wire [ 9:0] workY = CounterY[9:1];
-wire        workBank = CounterY[1];
-wire [ 9:0] work_write_address = {workBank, workcnt[8:0]} - 3;      //-3: 3 pipeline stages for background rendering
+wire        workBank = workY[0];
+wire [ 9:0] work_write_address = {workBank, workX[8:0]} - 3;      //-3: 3 pipeline stages for background rendering
 
 
 //Get glyph
-wire [ 5:0]  glyphX = workcnt[8:3];
+wire [ 5:0]  glyphX = workX[8:3];
 wire [ 5:0]  glyphY = workY[8:3];
 wire [11:0]  glyphAddr = {glyphY, glyphX};
 wire [ 7:0]  currentGlyph;
@@ -87,7 +130,7 @@ bram_tdp #( //4K RAM which holds pointer into chardata_ram for 64x64 grid of cha
 
 reg [2:0] _column;
 always @(posedge vga_clk)
-    _column <= workcnt[2:0];
+    _column <= workX[2:0];
 
 reg [7:0] _glyph;
 always @(posedge vga_clk)
@@ -97,10 +140,6 @@ always @(posedge vga_clk)
 wire [11:0] glyphdataaddr =  {currentGlyph, workY[2:0], _column[2]};
 wire [ 7:0] charout4;
 wire [ 1:0] charout;
-//wire [ 7:0] chardataX = workX[8:2];
-//wire [11:0] charaddr = workY[9:4] + chardataX;
-//wire [1:0]  chardataY = workX[5:4];
-//wire [4:0]  charblockDataAddress = {chardataY, chardataY};
 bram_tdp #( //4K RAM with pixeldata of glyps, 1 byte holds 4 pixel (index into char color table)
     .DATA_WIDTH(8),
     .ADDR_WIDTH(12),
@@ -130,16 +169,6 @@ assign charout = __column[1:0] == 2'b00 ? charout4[7:6] :
                  __column[1:0] == 2'b10 ? charout4[3:2] :
                                           charout4[1:0] ;
 
-/*always @(charout4) begin
-    case (charout4)
-        2'b00: assign charout = charout4[7:6];
-        2'b01: assign charout = charout4[5:4];
-        2'b10: assign charout = charout4[3:2];
-        2'b11: assign charout = charout4[1:0];
-    endcase
-end*/
-
-
 
 wire [ 9:0] palletteaddress = {_glyph, charout};
 wire [15:0] coloredcharout;
@@ -164,10 +193,10 @@ bram_tdp #( //2K RAM which holds 4 colors for each possible character (16bit col
 );
 
 
-
+//VGA scanner for output on lines to the VGA port
 wire        scanBank = CounterY[1];
 wire [ 8:0] scanX = CounterX[9:1];
-wire [ 9:0] scan_read_address = {~scanBank, scanX};
+wire [ 9:0] scan_read_address = {scanBank, scanX};
 
 wire [7:0] comp_out;
 bram_tdp #(
