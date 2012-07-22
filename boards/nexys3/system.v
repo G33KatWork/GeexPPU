@@ -101,9 +101,17 @@ wire        workBank = workY[0];
 wire [ 9:0] work_write_address = {workBank, workX[8:0]} - 3;      //-3: 3 pipeline stages for background rendering
 
 
+//Registers for general control
+reg  [14:0] bgColor = 15'h19DD; //light blue
+reg  [ 8:0] scrollX = 9'h1;
+reg  [ 8:0] scrollY = 9'h0;
+
+wire [ 8:0] workXScrolled = workX + scrollX;
+wire [ 8:0] workYScrolled = workY + scrollY;
+
 //Get glyph
-wire [ 5:0]  glyphX = workX[8:3];
-wire [ 5:0]  glyphY = workY[8:3];
+wire [ 5:0]  glyphX = workXScrolled[8:3];
+wire [ 5:0]  glyphY = workYScrolled[8:3];
 wire [11:0]  glyphAddr = {glyphY, glyphX};
 wire [ 7:0]  currentGlyph;
 
@@ -130,14 +138,14 @@ bram_tdp #( //4K RAM which holds pointer into chardata_ram for 64x64 grid of cha
 
 reg [2:0] _column;
 always @(posedge vga_clk)
-    _column <= workX[2:0];
+    _column <= workXScrolled[2:0];
 
 reg [7:0] _glyph;
 always @(posedge vga_clk)
     _glyph <= currentGlyph;
 
 
-wire [11:0] glyphdataaddr =  {currentGlyph, workY[2:0], _column[2]};
+wire [11:0] glyphdataaddr =  {currentGlyph, workYScrolled[2:0], _column[2]};
 wire [ 7:0] charout4;
 wire [ 1:0] charout;
 bram_tdp #( //4K RAM with pixeldata of glyps, 1 byte holds 4 pixel (index into char color table)
@@ -195,36 +203,26 @@ bram_tdp #( //2K RAM which holds 4 colors for each possible character (16bit col
 
 
 
-reg  [14:0] bgColor = 15'h19DD; //light blue
-
+//compose the final color to be put into the compositing RAM
 wire        pixelTransparent = coloredcharout[15];
 wire [14:0] finalColor = pixelTransparent ? bgColor : coloredcharout[14:0];
-
-
-wire [ 7:0] finalColor8Bit = {finalColor[14:12], finalColor[9:7], finalColor[4:3]};
 
 //VGA scanner for output on lines to the VGA port
 wire        scanBank = CounterY[1];
 wire [ 8:0] scanX = CounterX[9:1];
 wire [ 9:0] scan_read_address = {scanBank, scanX};
 
-wire [7:0] comp_out;
+wire [14:0] comp_out;
 bram_tdp #(
-    .DATA_WIDTH(8),
+    .DATA_WIDTH(15),
     .ADDR_WIDTH(10)
 ) line_ram (
     .a_clk(vga_clk),
     .a_ena(work_en),
     .a_wr(1'b1),
     .a_addr(work_write_address),
-    .a_din(finalColor8Bit),                  //just for testing
+    .a_din(finalColor),                  //just for testing
     .a_dout(),
-    /*.a_clk(1'b0),
-    .a_ena(1'b0),
-    .a_wr(1'b0),
-    .a_addr(10'b0),
-    .a_din(8'b0),
-    .a_dout(),*/
 
     .b_clk(vga_clk),
     .b_ena(1'b1),
@@ -234,9 +232,30 @@ bram_tdp #(
     .b_dout(comp_out)
 );
 
-assign vgaRed = vga_active ? comp_out[7:5] : 3'b0;
-assign vgaGreen = vga_active ? comp_out[4:2] : 3'b0;
-assign vgaBlue = vga_active ? comp_out[1:0] : 2'b0;
+assign vgaRed = vga_active ? comp_out[14:12] : 3'b0;
+assign vgaGreen = vga_active ? comp_out[9:7] : 3'b0;
+assign vgaBlue = vga_active ? comp_out[4:3] : 2'b0;
+
+
+//scroll test
+reg [23:0] scrollCounter;
+always @(posedge clk or negedge rst_n) begin
+    if(~rst_n) begin
+        scrollCounter <= 0;
+    end else begin
+        scrollCounter <= scrollCounter + 1;
+    end
+end
+
+always @(posedge clk) begin
+    if(scrollCounter[19:0] == 0)
+        scrollX <= scrollX + 1;
+
+    if(scrollCounter[23:0] == 0)
+        scrollY <= scrollY + 1;
+end
+
+
 
 //Fancy LED blinky stuff
 reg [25:0] counter;
