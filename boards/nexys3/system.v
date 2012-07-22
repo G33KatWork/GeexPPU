@@ -228,13 +228,36 @@ bram_tdp #(
     .b_ena(1'b1),
     .b_wr(1'b0),
     .b_addr(scan_read_address),
-    .b_din(8'h00),
+    .b_din(15'h00),
     .b_dout(comp_out)
 );
 
-assign vgaRed = vga_active ? comp_out[14:12] : 3'b0;
-assign vgaGreen = vga_active ? comp_out[9:7] : 3'b0;
-assign vgaBlue = vga_active ? comp_out[4:3] : 2'b0;
+wire [4:0] color_r = comp_out[14:10];
+wire [4:0] color_g = comp_out[9:5];
+wire [4:0] color_b = comp_out[4:0];
+
+`define ENABLE_DITHERING
+`ifdef ENABLE_DITHERING
+    //dithering blatantly taken from the Gameduino ;)
+    wire [1:0] dith;
+    // 0 2
+    // 3 1
+    assign dith = {(CounterX[0]^CounterY[0]), CounterY[0]};
+    wire [5:0] dith_r = (color_r + dith);
+    wire [5:0] dith_g = (color_g + dith);
+    wire [5:0] dith_b = (color_b + dith);
+    wire [2:0] f_r = {3{dith_r[5]}} | dith_r[4:2];
+    wire [2:0] f_g = {3{dith_g[5]}} | dith_g[4:2];
+    wire [1:0] f_b = {2{dith_b[5]}} | dith_b[4:3];
+
+    assign vgaRed = vga_active ? f_r : 3'b0;
+    assign vgaGreen = vga_active ? f_g : 3'b0;
+    assign vgaBlue = vga_active ? f_b : 2'b0;
+`else
+    assign vgaRed = vga_active ? color_r[4:2] : 3'b0;
+    assign vgaGreen = vga_active ? color_g[4:2] : 3'b0;
+    assign vgaBlue = vga_active ? color_b[4:3] : 2'b0;
+`endif
 
 
 //scroll test
